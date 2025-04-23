@@ -10,7 +10,7 @@ app.use(cors());
 app.use(express.json()); 
 const User = require("./models/User"); 
 const jwt = require("jsonwebtoken");
-const SECRET_KEY = "your_secret_key"; // Replace with a secure key
+const SECRET_KEY = "Sj9DGmXuJu"; 
 
 mongoose.connect(
   "mongodb+srv://amreahmed:MARTIN123martin@cluster0.7vqsuyo.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
