@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Add Plant</title>
+</head>
+<body>
+  <h2>Add a New Plant</h2>
+  <form id="plantForm">
+    <input type="text" placeholder="Name" name="name" required /><br />
+    <input type="number" placeholder="Default Temp" name="defaultTemp" required /><br />
+    <input type="number" placeholder="Default Light" name="defaultLight" required /><br />
+    <input type="number" placeholder="Default Soil" name="defaultSoil" required /><br />
+    <textarea name="description" placeholder="Description"></textarea><br />
+    <input type="text" placeholder="Photo URL" name="photo" /><br />
+    <button type="submit">Add Plant</button>
+  </form>
+
+  <script>
+    document.getElementById("plantForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const form = new FormData(e.target);
+      const data = Object.fromEntries(form.entries());
+
+      const res = await fetch("http://localhost:3000/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      const result = await res.json();
+      alert(JSON.stringify(result));
+    });
+  </script>
+</body>
+</html>
