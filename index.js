@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const Device = require("./models/Device");
 const Plant = require("./models/Planet");
+const verifyToken = require("./middleware/auth");
 const QRCode = require("qrcode");
 const bcrypt = require("bcrypt");
 const app = express();
@@ -10,10 +11,11 @@ app.use(cors());
 app.use(express.json()); 
 const User = require("./models/User"); 
 const jwt = require("jsonwebtoken");
-const SECRET_KEY = "Sj9DGmXuJu"; 
+require("dotenv").config();
+const SECRET_KEY = process.env.SECRET_KEY;
 
 mongoose.connect(
-  "mongodb+srv://amreahmed:MARTIN123martin@cluster0.7vqsuyo.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
+  process.env.mongo_uri,
   {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -108,6 +110,34 @@ app.get("/generate-qr/:potId", (req, res) => {
     res.send(`<img src="${url}" />`);
   });
 });
+// get plant by id 
+app.get("/plant/:id", async (req, res) => {
+  const {id} = req.params;
+  try {
+    const plant = await plant.findById(id);
+    if (!plant){
+      return res.status(404).json({ message: "Plant not found" });
+    }
+    res.json(plant);
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching plant", error: err });
+    console.log("Error fetching plant", err );
+  }
+});
+// profile api
+app.get("/profile", verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("-password"); // for not showing the password of the user
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.status(200).json({message: "User profile", user });
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching user profile", error: err });
+    console.log("Error fetching user profile", err );
+  }
+}
+);
 // register api 
 app.post("/signup", async (req, res) => {
   const { username, password } = req.body;
@@ -175,9 +205,6 @@ app.post("/assign-plant", async (req, res) => {
     res.status(500).json({ message: "Error assigning plant", error: err });
   }
 });
-
-
-
 // Update sensor data from ESP32
 app.post("/update-data", async (req, res) => {
   const { uuid, moisture, light } = req.body;
