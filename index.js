@@ -3,7 +3,6 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const Device = require("./models/Device");
 const Plant = require("./models/Planet");
-const verifyToken = require("./middleware/auth");
 const QRCode = require("qrcode");
 const bcrypt = require("bcrypt");
 const app = express();
@@ -125,7 +124,7 @@ app.get("/plant/:id", async (req, res) => {
   }
 });
 // profile api
-app.get("/profile", verifyToken, async (req, res) => {
+app.get("/profile", async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password"); // for not showing the password of the user
     if (!user) {
@@ -147,7 +146,7 @@ app.post("/signup", async (req, res) => {
     await newUser.save();
 
     // JWT token
-    const token = jwt.sign({ id: newUser._id, username: newUser.username }, SECRET_KEY, { expiresIn: "1h" });
+    const token = jwt.sign({ id: newUser._id, username: newUser.username }, SECRET_KEY, { expiresIn: "3h" });
 
     res.status(201).json({ message: "User registered", token });
   } catch (err) {
@@ -169,7 +168,7 @@ app.post("/login", async (req, res) => {
     }
 
     // Generate JWT token
-    const token = jwt.sign({ id: user._id, username: user.username }, SECRET_KEY, { expiresIn: "1h" });
+    const token = jwt.sign({ id: user._id, username: user.username }, SECRET_KEY, { expiresIn: "3h" });
 
     res.status(200).json({ message: "Login successful", token });
     console.log("Login successful", token);
