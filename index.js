@@ -125,20 +125,20 @@ app.get("/plant/:id", async (req, res) => {
 });
 // profile api 
 app.get("/profile", async (req, res) => {
-  const { username, password } = req.body;
+  const { username } = req.body; // Extract username from the request body
+  if (!username) {
+    return res.status(400).json({ message: "Username is required" });
+  }
+
   try {
-    const user = await User.findOne({ username });
+    const user = await User.findOne({ username }).select("-password"); // Exclude password from the response
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid password, try again" });
-    }
 
-    res.status(200).json({ message: "reached profile succsisful", username });
+    res.status(200).json({ message: "Profile fetched successfully", user });
   } catch (err) {
-    res.status(500).json({ message: "fetching profile", error: err });
+    res.status(500).json({ message: "Error fetching profile", error: err });
     console.log(err);
   }
 });
