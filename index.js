@@ -123,20 +123,25 @@ app.get("/plant/:id", async (req, res) => {
     console.log("Error fetching plant", err );
   }
 });
-// profile api
+// profile api 
 app.get("/profile", async (req, res) => {
+  const { username, password } = req.body;
   try {
-    const user = await User.findById(req.user.id).select("-password"); // for not showing the password of the user
+    const user = await User.findOne({ username });
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    res.status(200).json({message: "User profile", user });
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid password, try again" });
+    }
+
+    res.status(200).json({ message: "reached profile succsisful", username });
   } catch (err) {
-    res.status(500).json({ message: "Error fetching user profile", error: err });
-    console.log("Error fetching user profile", err );
+    res.status(500).json({ message: "fetching profile", error: err });
+    console.log(err);
   }
-}
-);
+});
 // register api 
 app.post("/signup", async (req, res) => {
   const { username, password } = req.body;
@@ -170,7 +175,7 @@ app.post("/login", async (req, res) => {
     // Generate JWT token
     const token = jwt.sign({ id: user._id, username: user.username }, SECRET_KEY, { expiresIn: "3h" });
 
-    res.status(200).json({ message: "Login successful", token });
+    res.status(200).json({ message: "Login successful", username , token });
     console.log("Login successful", token);
   } catch (err) {
     res.status(500).json({ message: "Error logging in", error: err });
@@ -185,7 +190,6 @@ app.post('/add', async (req, res) => {
   await plant.save();
   res.json({ success: true, plant });
 });
-
 
 // Assign a plant to a device
 app.post("/assign-plant", async (req, res) => {
@@ -234,5 +238,6 @@ app.post("/update-data", async (req, res) => {
     res.status(500).json({ message: "Failed to update data", error: err });
   }
 });
+
 
 app.listen(3000, () => console.log("API running on http://localhost:3000"));
