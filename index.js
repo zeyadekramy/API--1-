@@ -13,6 +13,8 @@ const jwt = require("jsonwebtoken");
 require("dotenv").config();
 const SECRET_KEY = process.env.SECRET_KEY;
 
+const tokenBlacklist = new Set();
+
 mongoose.connect(
   process.env.mongo_uri,
   {
@@ -113,7 +115,7 @@ app.get("/generate-qr/:potId", (req, res) => {
 app.get("/plant/:id", async (req, res) => {
   const {id} = req.params;
   try {
-    const plant = await plant.findById(id);
+    const plant = await Plant.findById(id);
     if (!plant){
       return res.status(404).json({ message: "Plant not found" });
     }
@@ -123,7 +125,22 @@ app.get("/plant/:id", async (req, res) => {
     console.log("Error fetching plant", err );
   }
 });
-// profile api 
+// delete plant by id //////////////////////////////////////////////
+app.delete("/plant/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const plant = await Plant.findByIdAndDelete(id);
+    if (!plant) {
+      return res.status(404).json({ message: "Plant not found" });
+    }
+    res.json({ message: "Plant deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Error deleting plant", error: err });
+    console.log("Error deleting plant", err );
+  }
+})
+
+// profile api //////////////////////////////////////
 app.get("/profile", async (req, res) => {
   const { username } = req.body; // Extract username from the request body
   if (!username) {
@@ -182,7 +199,33 @@ app.post("/login", async (req, res) => {
     console.log(err);
   }
 });
+// Logout API //////////////////////
+app.post('/logout', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  
+  if (!token) {
+    return res.status(400).json({ message: 'Token missing' });
+  }
 
+  tokenBlacklist.add(token); // Blacklist the token
+  res.status(200).json({ message: 'Logged out successfully' });
+});
+
+// Middleware to check if token is blacklisted
+function isTokenBlacklisted(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  
+  if (tokenBlacklist.has(token)) {
+    return res.status(401).json({ message: 'Token is blacklisted' });
+  }
+  
+  next();
+}
+
+// Example protected route
+app.get('/protected', isTokenBlacklisted, (req, res) => {
+  res.json({ message: 'You accessed a protected route' });
+});
 
 app.post('/add', async (req, res) => {
   const { name, defaultTemp, defaultLight, defaultSoil, description, photo } = req.body;

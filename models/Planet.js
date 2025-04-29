@@ -6,7 +6,9 @@ const plantSchema = new mongoose.Schema({
   defaultLight: { type: Number, required: true },
   defaultSoil: { type: Number, required: true },
   description: { type: String },
-  photo: { type: String }, // you can store an image URL here
+  photo: { type: String },
+  _id : { type: String, required: true },
+  id :{type :String , required: true},
 });
 
 module.exports = mongoose.model("Plant", plantSchema);
