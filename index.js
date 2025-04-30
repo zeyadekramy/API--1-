@@ -5,6 +5,8 @@ const Device = require("./models/Device");
 const Plant = require("./models/Planet");
 const QRCode = require("qrcode");
 const bcrypt = require("bcrypt");
+const { Expo } = require("expo-server-sdk");
+const expo = new Expo();
 const app = express();
 app.use(cors());
 app.use(express.json()); 
@@ -14,6 +16,89 @@ require("dotenv").config();
 const SECRET_KEY = process.env.SECRET_KEY;
 
 const tokenBlacklist = new Set();
+// notification api //////////////////////////////////////////////////////////////
+
+app.post("/notification", async (req, res) => {
+  const { uuid, moisture, light, temperature, expoPushToken } = req.body;
+
+  if (!uuid || moisture == null || light == null || temperature == null) {
+    return res.status(400).json({ message: "Missing data" });
+  }
+
+  try {
+    // Find the device and update sensor data
+    const device = await Device.findOneAndUpdate(
+      { uuid },
+      {
+        $set: {
+          "sensorData.moisture": moisture,
+          "sensorData.light": light,
+          "sensorData.temperature": temperature,
+          "sensorData.timestamp": new Date(),
+        },
+      },
+      { new: true }
+    );
+
+    if (!device) {
+      return res.status(404).json({ message: "Device not found" });
+    }
+
+    // Check for significant changes in sensor readings
+    const previousTemperature = device.sensorData?.temperature || 0;
+    const previousMoisture = device.sensorData?.moisture || 0;
+    const previousLight = device.sensorData?.light || 0;
+
+    // Notifications for temperature changes
+    if (Math.abs(previousTemperature - temperature) > 5) {
+      if (expoPushToken && Expo.isExpoPushToken(expoPushToken)) {
+        const message = {
+          to: expoPushToken,
+          sound: "default",
+          title: "Temperature Alert",
+          body: `The temperature has changed to ${temperature}°C.`,
+          data: { uuid, temperature },
+        };
+
+        await expo.sendPushNotificationsAsync([message]);
+      }
+    }
+
+    // Notifications for moisture changes
+    if (Math.abs(previousMoisture - moisture) > 15) {
+      if (expoPushToken && Expo.isExpoPushToken(expoPushToken)) {
+        const message = {
+          to: expoPushToken,
+          sound: "default",
+          title: "Moisture Alert",
+          body: `The moisture level has changed to ${moisture}.`,
+          data: { uuid, moisture },
+        };
+
+        await expo.sendPushNotificationsAsync([message]);
+      }
+    }
+
+    // Notifications for light changes
+    if (Math.abs(previousLight - light) > 1500) {
+      if (expoPushToken && Expo.isExpoPushToken(expoPushToken)) {
+        const message = {
+          to: expoPushToken,
+          sound: "default",
+          title: "Light Alert",
+          body: `The light level has changed to ${light}.`,
+          data: { uuid, light },
+        };
+
+        await expo.sendPushNotificationsAsync([message]);
+      }
+    }
+
+    res.json({ message: "Data updated", device });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to update data", error: err });
+  }
+});
 
 mongoose.connect(
   process.env.mongo_uri,
