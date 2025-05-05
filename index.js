@@ -443,6 +443,30 @@ app.post("/update-data", async (req, res) => {
     res.status(500).json({ message: "Failed to update data", error: err });
   }
 });
+///////////////////////
+app.post("/token", async (req, res) => {
+  const { token } = req.body;
+
+  if (!token) {
+    return res.status(400).json({ error: "Push token is required" });
+  }
+
+  try {
+    // Prevent duplicates
+    const existing = await PushToken.findOne({ token });
+    if (existing) {
+      return res.status(200).json({ message: "Token already exists" });
+    }
+
+    const newToken = new PushToken({ token });
+    await newToken.save();
+
+    res.status(201).json({ message: "Push token saved successfully" });
+  } catch (err) {
+    console.error("Error saving push token:", err);
+    res.status(500).json({ error: "Failed to save push token" });
+  }
+});
 
 
  //app.listen(3000, () => console.log("API running on http://localhost:3000"));
