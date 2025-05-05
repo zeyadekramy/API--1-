@@ -19,24 +19,92 @@ const tokenBlacklist = new Set();
 // notification api //////////////////////////////////////////////////////////////
 
 app.post("/notification", async (req, res) => {
-  const { uuid, moisture, light, temperature, expoPushToken } = req.body;
+  const { uuid, moisture, light, temperature } = req.body;
 
   if (!uuid || moisture == null || light == null || temperature == null) {
     return res.status(400).json({ message: "Missing data" });
   }
 
   try {
-    // Find the device and update sensor data
+    // Find the device and its associated plant
+    const device = await Device.findOne({ uuid }).populate("assignedPlant");
+    if (!device) {
+      return res.status(404).json({ message: "Device not found" });
+    }
+
+    const plant = device.assignedPlant;
+    if (!plant) {
+      return res.status(404).json({ message: "No plant assigned to this device" });
+    }
+
+    const { defaultTemp, defaultLight, defaultSoil } = plant;
+    const expoPushToken = device.expoPushToken;
+
+    // Ensure the Expo Push Token exists
+    if (!expoPushToken || !Expo.isExpoPushToken(expoPushToken)) {
+      return res.status(400).json({ message: "Invalid or missing Expo Push Token" });
+    }
+
+    // Notifications for temperature
+    if (temperature < defaultTemp.min || temperature > defaultTemp.max) {
+      const message = {
+        to: expoPushToken,
+        sound: "default",
+        title: "Temperature Alert",
+        body: `Temperature is out of range! Current: ${temperature}°C (Allowed: ${defaultTemp.min}°C - ${defaultTemp.max}°C)`,
+        data: { uuid, temperature },
+      };
+
+      await expo.sendPushNotificationsAsync([message]);
+    }
+
+    // Notifications for moisture
+    if (moisture < defaultSoil.min || moisture > defaultSoil.max) {
+      const message = {
+        to: expoPushToken,
+        sound: "default",
+        title: "Moisture Alert",
+        body: `Moisture is out of range! Current: ${moisture} (Allowed: ${defaultSoil.min} - ${defaultSoil.max})`,
+        data: { uuid, moisture },
+      };
+
+      await expo.sendPushNotificationsAsync([message]);
+    }
+
+    // Notifications for light
+    if (light < defaultLight.min || light > defaultLight.max) {
+      const message = {
+        to: expoPushToken,
+        sound: "default",
+        title: "Light Alert",
+        body: `Light level is out of range! Current: ${light} (Allowed: ${defaultLight.min} - ${defaultLight.max})`,
+        data: { uuid, light },
+      };
+
+      await expo.sendPushNotificationsAsync([message]);
+    }
+
+    // Update the device's sensor data
+    device.sensorData = { moisture, light, temperature, timestamp: new Date() };
+    await device.save();
+
+    res.json({ message: "Data updated and notifications sent if necessary", device });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to update data", error: err });
+  }
+});
+app.post("/plants", async (req, res) => {
+  const { uuid } = req.body;
+
+  if (!uuid || !expoPushToken) {
+    return res.status(400).json({ message: "Missing data" });
+  }
+
+
+  try {
     const device = await Device.findOneAndUpdate(
       { uuid },
-      {
-        $set: {
-          "sensorData.moisture": moisture,
-          "sensorData.light": light,
-          "sensorData.temperature": temperature,
-          "sensorData.timestamp": new Date(),
-        },
-      },
+
       { new: true }
     );
 
@@ -44,59 +112,9 @@ app.post("/notification", async (req, res) => {
       return res.status(404).json({ message: "Device not found" });
     }
 
-    // Check for significant changes in sensor readings
-    const previousTemperature = device.sensorData?.temperature || 0;
-    const previousMoisture = device.sensorData?.moisture || 0;
-    const previousLight = device.sensorData?.light || 0;
-
-    // Notifications for temperature changes
-    if (Math.abs(previousTemperature - temperature) > 5) {
-      if (expoPushToken && Expo.isExpoPushToken(expoPushToken)) {
-        const message = {
-          to: expoPushToken,
-          sound: "default",
-          title: "Temperature Alert",
-          body: `The temperature has changed to ${temperature}°C.`,
-          data: { uuid, temperature },
-        };
-
-        await expo.sendPushNotificationsAsync([message]);
-      }
-    }
-
-    // Notifications for moisture changes
-    if (Math.abs(previousMoisture - moisture) > 15) {
-      if (expoPushToken && Expo.isExpoPushToken(expoPushToken)) {
-        const message = {
-          to: expoPushToken,
-          sound: "default",
-          title: "Moisture Alert",
-          body: `The moisture level has changed to ${moisture}.`,
-          data: { uuid, moisture },
-        };
-
-        await expo.sendPushNotificationsAsync([message]);
-      }
-    }
-
-    // Notifications for light changes
-    if (Math.abs(previousLight - light) > 1500) {
-      if (expoPushToken && Expo.isExpoPushToken(expoPushToken)) {
-        const message = {
-          to: expoPushToken,
-          sound: "default",
-          title: "Light Alert",
-          body: `The light level has changed to ${light}.`,
-          data: { uuid, light },
-        };
-
-        await expo.sendPushNotificationsAsync([message]);
-      }
-    }
-
-    res.json({ message: "Data updated", device });
+    res.json({ message: "Expo Push Token updated successfully", device });
   } catch (err) {
-    res.status(500).json({ message: "Failed to update data", error: err });
+    res.status(500).json({ message: "Failed to update token", error: err });
   }
 });
 
@@ -110,7 +128,7 @@ mongoose.connect(
 
 // Register a new device
 app.post("/register-device", async (req, res) => {
-  const { name, uuid, wifiSSID, wifiPassword } = req.body;
+  const { name, uuid, wifiSSID, wifiPassword} = req.body;
   try {
     const newDevice = new Device({ name, uuid, wifiSSID, wifiPassword });
     await newDevice.save();
@@ -153,11 +171,19 @@ app.get("/device/:uuid", async (req, res) => {
 
     // Status Logic
     const status = {
-      moisture: moisture < defaultSoil ? "Needs Water" : moisture > defaultSoil + 20 ? "Too Wet" : "Moisture OK",
-      light: light < defaultLight ? "Needs More Light" : light > defaultLight + 200 ? "Too Bright" : "Light OK",
+      moisture: moisture < defaultSoil.min ? "Needs Water" : moisture > defaultSoil.max ? "Too Wet" : "Moisture OK",
+      light: light < defaultLight.min ? "Needs More Light" : light > defaultLight.max ? "Too Bright" : "Light OK",
       temperature:
-        temperature < defaultTemp ? "Too Cold" : temperature > defaultTemp + 5 ? "Too Hot" : "Temperature OK",
+        temperature < defaultTemp.min
+          ? "Too Cold"
+          : temperature > defaultTemp.max
+          ? "Too Hot"
+          : "Temperature OK",
     };
+
+    // Update the status in the database
+    device.status = status;
+    await device.save();
 
     const deviceData = {
       uuid: device.uuid,
@@ -175,7 +201,7 @@ app.get("/device/:uuid", async (req, res) => {
         defaultLight,
         defaultSoil,
       },
-      status, // <- include this new field
+      status, // Include the status in the response
     };
 
     res.json(deviceData);
@@ -312,11 +338,34 @@ app.get('/protected', isTokenBlacklisted, (req, res) => {
   res.json({ message: 'You accessed a protected route' });
 });
 
-app.post('/add', async (req, res) => {
-  const { name, defaultTemp, defaultLight, defaultSoil, description, photo } = req.body;
-  const plant = new Plant({ name, defaultTemp, defaultLight, defaultSoil, description, photo });
-  await plant.save();
-  res.json({ success: true, plant });
+app.post("/add", async (req, res) => {
+  const {
+    name,
+    minTemp,
+    maxTemp,
+    minLight,
+    maxLight,
+    minSoil,
+    maxSoil,
+    description,
+    photo,
+  } = req.body;
+
+  try {
+    const newPlant = new Plant({
+      name,
+      defaultTemp: { min: minTemp, max: maxTemp },
+      defaultLight: { min: minLight, max: maxLight },
+      defaultSoil: { min: minSoil, max: maxSoil },
+      description,
+      photo,
+    });
+
+    await newPlant.save();
+    res.status(201).json({ message: "Plant added successfully", plant: newPlant });
+  } catch (err) {
+    res.status(500).json({ message: "Error adding plant", error: err });
+  }
 });
 
 // Assign a plant to a device
@@ -338,9 +387,9 @@ app.post("/assign-plant", async (req, res) => {
 });
 // Update sensor data from ESP32
 app.post("/update-data", async (req, res) => {
-  const { uuid, moisture, light } = req.body;
+  const { uuid, moisture, light, temperature, expoPushToken } = req.body;
 
-  if (!uuid || moisture == null || light == null) {
+  if (!uuid || moisture == null || light == null || temperature == null) {
     return res.status(400).json({ message: "Missing data" });
   }
 
@@ -351,7 +400,9 @@ app.post("/update-data", async (req, res) => {
         $set: {
           "sensorData.moisture": moisture,
           "sensorData.light": light,
+          "sensorData.temperature": temperature,
           "sensorData.timestamp": new Date(),
+          ...(expoPushToken && { expoPushToken }), // Update expoPushToken if provided
         },
       },
       { new: true }
