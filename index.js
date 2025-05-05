@@ -419,4 +419,5 @@ app.post("/update-data", async (req, res) => {
 });
 
 
-app.listen(3000, () => console.log("API running on http://localhost:3000"));
+ //app.listen(3000, () => console.log("API running on http://localhost:3000"));
+app.listen(8080,"0.0.0.0", () => console.log("API running on http://0.0.0.0:8080"));
