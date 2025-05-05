@@ -16,6 +16,32 @@ require("dotenv").config();
 const SECRET_KEY = process.env.SECRET_KEY;
 
 const tokenBlacklist = new Set();
+// assign push token to device route//////////////////////////
+// Assign push token to device route
+app.post('/devices/:uuid/push-token', async (req, res) => {
+  const uuid = req.params.uuid;
+  const expoPushToken = req.body.expoPushToken;
+
+  // Validate the request
+  if (!uuid || !expoPushToken) {
+    return res.status(400).json({ error: 'Missing required parameters' });
+  }
+
+  // Find the device by UUID
+  const device = await device.findOne({ uuid });
+
+  if (!device) {
+    return res.status(404).json({ error: 'Device not found' });
+  }
+
+  // Update the device with the push token
+  await db.collection('devices').updateOne(
+    { uuid },
+    { $set: { expoPushToken } }
+  );
+
+  res.json({ message: 'Push token assigned to device' });
+});
 // notification api //////////////////////////////////////////////////////////////
 
 app.post("/notification", async (req, res) => {
@@ -128,9 +154,9 @@ mongoose.connect(
 
 // Register a new device
 app.post("/register-device", async (req, res) => {
-  const { name, uuid, wifiSSID, wifiPassword} = req.body;
+  const { name, uuid} = req.body;
   try {
-    const newDevice = new Device({ name, uuid, wifiSSID, wifiPassword });
+    const newDevice = new Device({ name, uuid });
     await newDevice.save();
     res.status(201).json({ message: "Device registered" });
   } catch (err) {
