@@ -122,7 +122,7 @@ app.post("/notification", async (req, res) => {
 app.post("/plants", async (req, res) => {
   const { uuid } = req.body;
 
-  if (!uuid || !expoPushToken) {
+  if (!uuid ) {
     return res.status(400).json({ message: "Missing data" });
   }
 
@@ -413,7 +413,7 @@ app.post("/assign-plant", async (req, res) => {
 });
 // Update sensor data from ESP32
 app.post("/update-data", async (req, res) => {
-  const { uuid, moisture, light, temperature, expoPushToken } = req.body;
+  const { uuid, moisture, light, temperature } = req.body;
 
   if (!uuid || moisture == null || light == null || temperature == null) {
     return res.status(400).json({ message: "Missing data" });
@@ -428,7 +428,7 @@ app.post("/update-data", async (req, res) => {
           "sensorData.light": light,
           "sensorData.temperature": temperature,
           "sensorData.timestamp": new Date(),
-          ...(expoPushToken && { expoPushToken }), // Update expoPushToken if provided
+          
         },
       },
       { new: true }
